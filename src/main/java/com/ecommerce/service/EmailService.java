@@ -23,7 +23,7 @@ public class EmailService {
      */
     public String generateOtp(String email) {
         // Generate 6-digit OTP
-        String otp = String.format("%06d", random.nextInt(999999));
+        String otp = "%06d".formatted(random.nextInt(999999));
 
         // Store OTP with expiration time
         OtpData otpData = new OtpData(otp, LocalDateTime.now().plusMinutes(OTP_VALIDITY_MINUTES));
