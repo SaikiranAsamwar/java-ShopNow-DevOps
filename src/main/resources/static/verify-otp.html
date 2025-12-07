@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Verification - E-Commerce</title>
+    <link rel="stylesheet" href="css/auth.css">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-box">
+            <div class="auth-header">
+                <h1>📧 Email Verification</h1>
+                <p>Enter the 6-digit verification code sent to your email</p>
+            </div>
+            
+            <div class="verification-info">
+                <p><strong>Email:</strong> <span id="user-email"></span></p>
+                <p class="info-text">Please check your inbox and spam folder</p>
+            </div>
+            
+            <form id="otp-form">
+                <div class="form-group">
+                    <label for="otp">Verification Code</label>
+                    <input 
+                        type="text" 
+                        id="otp" 
+                        maxlength="6" 
+                        pattern="[0-9]{6}" 
+                        placeholder="Enter 6-digit code" 
+                        required
+                        autocomplete="off">
+                    <small>Code expires in 10 minutes</small>
+                </div>
+                
+                <button type="submit" class="btn-primary">Verify Email</button>
+                
+                <div class="resend-section">
+                    <p>Didn't receive the code?</p>
+                    <button type="button" id="resend-btn" class="btn-link">Resend Verification Code</button>
+                </div>
+            </form>
+            
+            <div class="auth-footer">
+                <p><a href="login.html">← Back to Login</a></p>
+            </div>
+        </div>
+    </div>
+    
+    <style>
+        .verification-info {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+        
+        .verification-info p {
+            margin: 0.5rem 0;
+            color: #495057;
+        }
+        
+        .info-text {
+            font-size: 0.875rem;
+            color: #6c757d;
+        }
+        
+        #otp {
+            text-align: center;
+            font-size: 1.5rem;
+            letter-spacing: 0.5rem;
+            font-weight: 600;
+        }
+        
+        .resend-section {
+            text-align: center;
+            margin-top: 1.5rem;
+        }
+        
+        .resend-section p {
+            margin-bottom: 0.5rem;
+            color: #6c757d;
+        }
+        
+        .btn-link {
+            background: none;
+            border: none;
+            color: #667eea;
+            cursor: pointer;
+            font-size: 0.875rem;
+            text-decoration: underline;
+            padding: 0;
+        }
+        
+        .btn-link:hover {
+            color: #764ba2;
+        }
+        
+        .btn-link:disabled {
+            color: #adb5bd;
+            cursor: not-allowed;
+        }
+    </style>
+    
+    <script src="js/verify-otp.js"></script>
+</body>
+</html>

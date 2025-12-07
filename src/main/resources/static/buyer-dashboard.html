@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buyer Dashboard - ShopNow</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <nav class="navbar">
+            <div class="container">
+                <div class="logo">
+                    <h1>🛒 ShopNow</h1>
+                </div>
+                <div class="nav-links">
+                    <span id="user-name" class="user-greeting"></span>
+                    <a href="#" onclick="showProducts()">Shop</a>
+                    <a href="#" onclick="showCart()">Cart (<span id="cart-count">0</span>)</a>
+                    <a href="#" onclick="showMyOrders()">My Orders</a>
+                    <a href="#" onclick="logout()">Logout</a>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Welcome Section -->
+        <section id="welcome-section" class="welcome-section">
+            <h2>Welcome to Your Shopping Dashboard!</h2>
+            <p>Browse products, manage your cart, and track your orders</p>
+        </section>
+
+        <!-- Search and Filter Section -->
+        <section id="search-section" class="search-section">
+            <div class="search-bar">
+                <input type="text" id="search-input" placeholder="Search products...">
+                <button onclick="searchProducts()">Search</button>
+            </div>
+            <div class="category-filter">
+                <button onclick="filterByCategory('all')">All</button>
+                <button onclick="filterByCategory('Electronics')">Electronics</button>
+                <button onclick="filterByCategory('Clothing')">Clothing</button>
+                <button onclick="filterByCategory('Books')">Books</button>
+                <button onclick="filterByCategory('Home')">Home & Kitchen</button>
+            </div>
+        </section>
+
+        <!-- Products Section -->
+        <section id="products-section" class="products-section">
+            <h2>Available Products</h2>
+            <div id="products-grid" class="products-grid"></div>
+        </section>
+
+        <!-- Cart Section -->
+        <section id="cart-section" class="cart-section" style="display: none;">
+            <h2>Shopping Cart</h2>
+            <div id="cart-items" class="cart-items"></div>
+            <div class="cart-summary">
+                <h3>Total: $<span id="cart-total">0.00</span></h3>
+                <button class="btn-checkout" onclick="showCheckout()">Proceed to Checkout</button>
+            </div>
+        </section>
+
+        <!-- Checkout Section -->
+        <section id="checkout-section" class="checkout-section" style="display: none;">
+            <h2>Checkout</h2>
+            <form id="checkout-form" onsubmit="placeOrder(event)">
+                <div class="checkout-info">
+                    <p><strong>Name:</strong> <span id="checkout-name"></span></p>
+                    <p><strong>Email:</strong> <span id="checkout-email"></span></p>
+                    <p><strong>Address:</strong> <span id="checkout-address"></span></p>
+                </div>
+                <div class="order-summary">
+                    <h3>Order Summary</h3>
+                    <div id="checkout-items"></div>
+                    <h3>Total: $<span id="checkout-total">0.00</span></h3>
+                </div>
+                <button type="submit" class="btn-place-order">Place Order</button>
+            </form>
+        </section>
+
+        <!-- My Orders Section -->
+        <section id="my-orders-section" class="orders-section" style="display: none;">
+            <h2>My Orders</h2>
+            <div id="orders-list" class="orders-list"></div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 ShopNow E-Commerce. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="js/auth.js"></script>
+    <script src="js/buyer-dashboard.js"></script>
+</body>
+</html>

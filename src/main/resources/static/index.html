@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E-Commerce Store</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script>
+        // Redirect to login if not authenticated, or to appropriate dashboard
+        window.addEventListener('DOMContentLoaded', () => {
+            const userStr = localStorage.getItem('user');
+            if (!userStr) {
+                window.location.href = 'login.html';
+            } else {
+                const user = JSON.parse(userStr);
+                // Redirect to appropriate dashboard based on role
+                if (user.role === 'BUYER') {
+                    window.location.href = 'buyer-dashboard.html';
+                } else if (user.role === 'SELLER') {
+                    window.location.href = 'seller-dashboard.html';
+                }
+            }
+        });
+    </script>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <nav class="navbar">
+            <div class="container">
+                <div class="logo">
+                    <h1>🛒 ShopNow</h1>
+                </div>
+                <div class="nav-links">
+                    <a href="#" onclick="showProducts()">Products</a>
+                    <a href="#" onclick="showCart()">Cart (<span id="cart-count">0</span>)</a>
+                    <a href="#" onclick="showOrders()">My Orders</a>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Search and Filter Section -->
+        <section id="search-section" class="search-section">
+            <div class="search-bar">
+                <input type="text" id="search-input" placeholder="Search products...">
+                <button onclick="searchProducts()">Search</button>
+            </div>
+            <div class="category-filter">
+                <button onclick="filterByCategory('all')">All</button>
+                <button onclick="filterByCategory('Electronics')">Electronics</button>
+                <button onclick="filterByCategory('Clothing')">Clothing</button>
+                <button onclick="filterByCategory('Books')">Books</button>
+                <button onclick="filterByCategory('Home')">Home & Kitchen</button>
+            </div>
+        </section>
+
+        <!-- Products Section -->
+        <section id="products-section" class="products-section">
+            <h2>Our Products</h2>
+            <div id="products-grid" class="products-grid">
+                <!-- Products will be loaded here -->
+            </div>
+        </section>
+
+        <!-- Cart Section -->
+        <section id="cart-section" class="cart-section" style="display: none;">
+            <h2>Shopping Cart</h2>
+            <div id="cart-items" class="cart-items">
+                <!-- Cart items will be loaded here -->
+            </div>
+            <div class="cart-summary">
+                <h3>Total: $<span id="cart-total">0.00</span></h3>
+                <button class="btn-checkout" onclick="showCheckout()">Proceed to Checkout</button>
+            </div>
+        </section>
+
+        <!-- Checkout Section -->
+        <section id="checkout-section" class="checkout-section" style="display: none;">
+            <h2>Checkout</h2>
+            <form id="checkout-form" onsubmit="placeOrder(event)">
+                <div class="form-group">
+                    <label>Full Name:</label>
+                    <input type="text" id="customer-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Email:</label>
+                    <input type="email" id="customer-email" required>
+                </div>
+                <div class="form-group">
+                    <label>Shipping Address:</label>
+                    <textarea id="shipping-address" rows="3" required></textarea>
+                </div>
+                <div class="order-summary">
+                    <h3>Order Summary</h3>
+                    <div id="checkout-items"></div>
+                    <h3>Total: $<span id="checkout-total">0.00</span></h3>
+                </div>
+                <button type="submit" class="btn-place-order">Place Order</button>
+            </form>
+        </section>
+
+        <!-- Orders Section -->
+        <section id="orders-section" class="orders-section" style="display: none;">
+            <h2>My Orders</h2>
+            <div class="order-email-form">
+                <input type="email" id="order-email" placeholder="Enter your email">
+                <button onclick="loadOrders()">View Orders</button>
+            </div>
+            <div id="orders-list" class="orders-list">
+                <!-- Orders will be loaded here -->
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 ShopNow E-Commerce. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

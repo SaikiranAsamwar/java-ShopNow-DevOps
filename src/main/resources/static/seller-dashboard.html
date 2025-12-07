@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seller Dashboard - ShopNow</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <nav class="navbar">
+            <div class="container">
+                <div class="logo">
+                    <h1>🏪 Seller Dashboard</h1>
+                </div>
+                <div class="nav-links">
+                    <span id="user-name" class="user-greeting"></span>
+                    <a href="#" onclick="showMyProducts()">My Products</a>
+                    <a href="#" onclick="showAddProduct()">Add Product</a>
+                    <a href="#" onclick="showSalesOrders()">Orders</a>
+                    <a href="#" onclick="logout()">Logout</a>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Welcome Section -->
+        <section id="welcome-section" class="welcome-section">
+            <h2>Welcome to Your Seller Dashboard!</h2>
+            <p id="business-info"></p>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3 id="total-products">0</h3>
+                    <p>Total Products</p>
+                </div>
+                <div class="stat-card">
+                    <h3 id="total-sales">0</h3>
+                    <p>Total Sales</p>
+                </div>
+                <div class="stat-card">
+                    <h3>$<span id="total-revenue">0.00</span></h3>
+                    <p>Revenue</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- My Products Section -->
+        <section id="my-products-section" class="products-section">
+            <h2>My Products</h2>
+            <div id="my-products-grid" class="products-grid"></div>
+        </section>
+
+        <!-- Add Product Section -->
+        <section id="add-product-section" class="form-section" style="display: none;">
+            <h2>Add New Product</h2>
+            <form id="add-product-form" onsubmit="handleAddProduct(event)">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Product Name</label>
+                        <input type="text" id="product-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Category</label>
+                        <select id="product-category" required>
+                            <option value="">Select Category</option>
+                            <option value="Electronics">Electronics</option>
+                            <option value="Clothing">Clothing</option>
+                            <option value="Books">Books</option>
+                            <option value="Home">Home & Kitchen</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="product-description" rows="4" required></textarea>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Price ($)</label>
+                        <input type="number" id="product-price" step="0.01" min="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Quantity</label>
+                        <input type="number" id="product-quantity" min="0" required>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Image URL (optional)</label>
+                    <input type="url" id="product-image">
+                </div>
+                
+                <button type="submit" class="btn-primary">Add Product</button>
+            </form>
+        </section>
+
+        <!-- Edit Product Section -->
+        <section id="edit-product-section" class="form-section" style="display: none;">
+            <h2>Edit Product</h2>
+            <form id="edit-product-form" onsubmit="handleEditProduct(event)">
+                <input type="hidden" id="edit-product-id">
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Product Name</label>
+                        <input type="text" id="edit-product-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Category</label>
+                        <select id="edit-product-category" required>
+                            <option value="Electronics">Electronics</option>
+                            <option value="Clothing">Clothing</option>
+                            <option value="Books">Books</option>
+                            <option value="Home">Home & Kitchen</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="edit-product-description" rows="4" required></textarea>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Price ($)</label>
+                        <input type="number" id="edit-product-price" step="0.01" min="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Quantity</label>
+                        <input type="number" id="edit-product-quantity" min="0" required>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Image URL</label>
+                    <input type="url" id="edit-product-image">
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">Update Product</button>
+                    <button type="button" class="btn-secondary" onclick="showMyProducts()">Cancel</button>
+                </div>
+            </form>
+        </section>
+
+        <!-- Orders Section -->
+        <section id="sales-orders-section" class="orders-section" style="display: none;">
+            <h2>Customer Orders</h2>
+            <div id="sales-orders-list" class="orders-list"></div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 ShopNow E-Commerce. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="js/auth.js"></script>
+    <script src="js/seller-dashboard.js"></script>
+</body>
+</html>
