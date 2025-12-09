@@ -1,6 +1,12 @@
-# E-Commerce Full-Stack Application
+# 🛒 ShopNow E-Commerce - Java Spring Boot DevOps Project
 
-A modern full-stack e-commerce application built with Spring Boot and vanilla JavaScript.
+[![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://www.oracle.com/java/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3.13-brightgreen.svg)](https://spring.io/projects/spring-boot)
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-Deployed-326CE5.svg)](https://kubernetes.io/)
+[![AWS](https://img.shields.io/badge/AWS-EKS%20%7C%20ECR-orange.svg)](https://aws.amazon.com/)
+
+A production-ready e-commerce application demonstrating complete DevOps lifecycle with Java Spring Boot, Docker, Kubernetes, Jenkins CI/CD, and AWS cloud deployment.
 
 ## 🚀 Features
 
