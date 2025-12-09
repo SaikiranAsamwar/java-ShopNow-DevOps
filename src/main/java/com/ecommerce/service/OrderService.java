@@ -26,7 +26,7 @@ public class OrderService {
     }
 
     public Optional<Order> getOrderById(Long id) {
-        return orderRepository.findById(id);
+        return orderRepository.findById(java.util.Objects.requireNonNull(id, "Order ID cannot be null"));
     }
 
     public List<Order> getOrdersByEmail(String email) {
@@ -43,8 +43,9 @@ public class OrderService {
         BigDecimal totalAmount = BigDecimal.ZERO;
 
         for (OrderRequest.OrderItemRequest itemRequest : orderRequest.getItems()) {
-            Product product = productRepository.findById(itemRequest.getProductId())
-                    .orElseThrow(() -> new RuntimeException("Product not found: " + itemRequest.getProductId()));
+            Long productId = java.util.Objects.requireNonNull(itemRequest.getProductId(), "Product ID cannot be null");
+            Product product = productRepository.findById(productId)
+                    .orElseThrow(() -> new RuntimeException("Product not found: " + productId));
 
             if (product.getQuantity() < itemRequest.getQuantity()) {
                 throw new RuntimeException("Insufficient stock for product: " + product.getName());
@@ -74,8 +75,9 @@ public class OrderService {
 
     @Transactional
     public Order updateOrderStatus(Long id, Order.OrderStatus status) {
-        Order order = orderRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Order not found with id: " + id));
+        Long orderId = java.util.Objects.requireNonNull(id, "Order ID cannot be null");
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found with id: " + orderId));
         order.setStatus(status);
         return orderRepository.save(order);
     }

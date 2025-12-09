@@ -117,7 +117,7 @@ public class AuthService {
     }
 
     public Optional<User> getUserById(Long id) {
-        return userRepository.findById(id);
+        return userRepository.findById(java.util.Objects.requireNonNull(id, "User ID cannot be null"));
     }
 
     public Optional<User> getUserByEmail(String email) {

@@ -20,7 +20,7 @@ public class ProductService {
     }
 
     public Optional<Product> getProductById(Long id) {
-        return productRepository.findById(id);
+        return productRepository.findById(java.util.Objects.requireNonNull(id, "Product ID cannot be null"));
     }
 
     public List<Product> getProductsByCategory(String category) {
@@ -33,13 +33,14 @@ public class ProductService {
 
     @Transactional
     public Product createProduct(Product product) {
-        return productRepository.save(product);
+        return productRepository.save(java.util.Objects.requireNonNull(product, "Product cannot be null"));
     }
 
     @Transactional
     public Product updateProduct(Long id, Product productDetails) {
-        Product product = productRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product not found with id: " + id));
+        Long productId = java.util.Objects.requireNonNull(id, "Product ID cannot be null");
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new RuntimeException("Product not found with id: " + productId));
 
         product.setName(productDetails.getName());
         product.setDescription(productDetails.getDescription());
@@ -54,6 +55,6 @@ public class ProductService {
 
     @Transactional
     public void deleteProduct(Long id) {
-        productRepository.deleteById(id);
+        productRepository.deleteById(java.util.Objects.requireNonNull(id, "Product ID cannot be null"));
     }
 }
