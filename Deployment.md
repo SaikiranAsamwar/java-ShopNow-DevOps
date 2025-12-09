@@ -34,7 +34,8 @@
 26. [Step 23: Install Prometheus & Grafana](#step-23-install-prometheus--grafana)
 27. [Troubleshooting](#troubleshooting)
 28. [Cost Optimization](#cost-optimization)
-29. [Cleanup](#cleanup)
+29. [Termination Process](#termination-process)
+30. [Quick Cleanup](#quick-cleanup-alternative)
 
 ---
 
@@ -1616,82 +1617,1067 @@ Potential Monthly: ~$60-80
 
 ---
 
-## 🧹 Cleanup
+## 🛑 Termination Process
 
-### Complete Cluster Teardown
+### Overview
 
-```bash
-# Delete Kubernetes resources
-kubectl delete namespace shopnow-app
-kubectl delete namespace monitoring
+This section provides a **detailed, step-by-step termination process** for completely removing all AWS resources created during deployment. Follow these steps in the exact order specified to avoid orphaned resources.
 
-# Wait for resources to be deleted
-kubectl get namespaces --watch
+**⚠️ WARNING**: This process is **IRREVERSIBLE**. All data will be permanently deleted. Ensure you have backups of any critical data before proceeding.
 
-# Delete EKS cluster
-eksctl delete cluster --name shopnow-cluster --region us-east-1
+---
 
-# This will:
-# - Delete all pods and services
-# - Delete worker nodes
-# - Delete control plane
-# - Delete Load Balancers
-# - Delete security groups
+### Phase 1: Application & Kubernetes Cleanup
 
-# Time: ~5-10 minutes
-
-# Verify cluster is deleted
-aws eks describe-cluster --name shopnow-cluster --region us-east-1
-# Should show: ResourceNotFoundException
-```
-
-### Partial Cleanup
+#### Step 1.1: Delete Application Deployments
 
 ```bash
-# Delete only application (keep cluster)
-kubectl delete namespace shopnow-app
-
-# Delete only monitoring
-kubectl delete namespace monitoring
-
-# Delete specific deployment
+# Delete backend deployment
 kubectl delete deployment shopnow-backend -n shopnow-app
+kubectl delete service shopnow-backend-service -n shopnow-app
+
+# Expected output:
+# deployment.apps "shopnow-backend" deleted
+# service "shopnow-backend-service" deleted
+
+# Delete frontend deployment
 kubectl delete deployment shopnow-frontend -n shopnow-app
+kubectl delete service shopnow-frontend-service -n shopnow-app
 
-# Scale down nodes
-eksctl scale nodegroup --cluster shopnow-cluster --name shopnow-nodes --nodes 0
+# Expected output:
+# deployment.apps "shopnow-frontend" deleted
+# service "shopnow-frontend-service" deleted
 
-# This puts nodes in a not-ready state but doesn't delete them
+# Verify deployments are deleted
+kubectl get deployments -n shopnow-app
+# Expected: No resources found in shopnow-app namespace
 ```
 
-### Clean Up AWS Resources
+#### Step 1.2: Delete HPA (Horizontal Pod Autoscaler)
 
 ```bash
-# Delete ECR repositories
-aws ecr delete-repository --repository-name shopnow/backend --region us-east-1 --force
-aws ecr delete-repository --repository-name shopnow/frontend --region us-east-1 --force
+# Delete autoscalers for backend
+kubectl delete hpa shopnow-backend-hpa -n shopnow-app
 
-# Delete IAM roles and policies
-aws iam detach-role-policy --role-name shopnow-eks-cluster-role --policy-arn arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+# Delete autoscalers for frontend
+kubectl delete hpa shopnow-frontend-hpa -n shopnow-app
+
+# Verify HPA is deleted
+kubectl get hpa -n shopnow-app
+# Expected: No resources found in shopnow-app namespace
+```
+
+#### Step 1.3: Delete ConfigMaps
+
+```bash
+# Delete application configuration
+kubectl delete configmap app-config -n shopnow-app
+
+# Verify ConfigMap is deleted
+kubectl get configmap -n shopnow-app
+# Expected: No resources found in shopnow-app namespace
+```
+
+#### Step 1.4: Delete Kubernetes Namespace
+
+```bash
+# Delete the entire application namespace
+kubectl delete namespace shopnow-app
+
+# Wait for namespace deletion to complete
+kubectl get namespace shopnow-app --watch
+# Once removed, press Ctrl+C
+
+# Verify namespace is gone
+kubectl get namespaces | grep shopnow-app
+# Expected: No output (namespace deleted)
+```
+
+---
+
+### Phase 2: Monitoring & Observability Cleanup
+
+#### Step 2.1: Delete Prometheus Stack
+
+```bash
+# Uninstall Prometheus Helm chart
+helm uninstall monitoring -n monitoring
+
+# Expected output:
+# release "monitoring" uninstalled
+
+# Verify Prometheus resources are deleted
+kubectl get all -n monitoring
+# Should show fewer resources
+```
+
+#### Step 2.2: Delete Monitoring Namespace
+
+```bash
+# Delete monitoring namespace
+kubectl delete namespace monitoring
+
+# Wait for deletion
+kubectl get namespace monitoring --watch
+# Once removed, press Ctrl+C
+
+# Verify
+kubectl get namespaces | grep monitoring
+# Expected: No output
+```
+
+#### Step 2.3: Delete Jenkins Resources
+
+```bash
+# If Jenkins is running in Kubernetes
+kubectl delete deployment jenkins -n kube-system 2>/dev/null || echo "Jenkins not found"
+kubectl delete service jenkins-service -n kube-system 2>/dev/null || echo "Jenkins service not found"
+
+# If Jenkins is on EC2, SSH and stop it
+# sudo systemctl stop jenkins
+# sudo systemctl disable jenkins
+```
+
+---
+
+### Phase 3: EKS Cluster Termination
+
+#### Step 3.1: Drain Worker Nodes
+
+```bash
+# Get list of nodes
+kubectl get nodes
+
+# Drain each node gracefully
+# Replace node names with actual node names from above
+kubectl drain <node-name> --ignore-daemonsets --delete-emptydir-data --grace-period=300
+
+# Example:
+# kubectl drain ip-10-0-1-100.ec2.internal --ignore-daemonsets --delete-emptydir-data --grace-period=300
+
+# Do this for all 3 nodes
+# Wait for each node to drain completely (may take 2-5 minutes per node)
+```
+
+#### Step 3.2: Delete Node Groups
+
+```bash
+# Scale down node group to 0
+eksctl delete nodegroup \
+  --cluster=shopnow-cluster \
+  --name shopnow-nodes \
+  --region us-east-1 \
+  --disable-eviction
+
+# Expected output:
+# 2025-12-09 XX:XX:XX [ℹ]  nodegroup will be deleted
+# 2025-12-09 XX:XX:XX [✔]  nodegroup successfully deleted
+
+# This takes 5-10 minutes
+# Monitor progress:
+eksctl get nodegroups --cluster=shopnow-cluster --region us-east-1
+```
+
+#### Step 3.3: Delete Add-ons
+
+```bash
+# List installed add-ons
+aws eks list-addons --cluster-name shopnow-cluster --region us-east-1
+
+# Delete VPC CNI
+aws eks delete-addon \
+  --cluster-name shopnow-cluster \
+  --addon-name vpc-cni \
+  --region us-east-1
+
+# Delete AWS Load Balancer Controller
+aws eks delete-addon \
+  --cluster-name shopnow-cluster \
+  --addon-name aws-load-balancer-controller \
+  --region us-east-1 2>/dev/null || echo "Add-on not found"
+
+# Delete CoreDNS
+aws eks delete-addon \
+  --cluster-name shopnow-cluster \
+  --addon-name coredns \
+  --region us-east-1
+
+# Delete kube-proxy
+aws eks delete-addon \
+  --cluster-name shopnow-cluster \
+  --addon-name kube-proxy \
+  --region us-east-1
+
+# Verify add-ons are deleted
+aws eks list-addons --cluster-name shopnow-cluster --region us-east-1
+# Expected: Empty list or minimal add-ons
+```
+
+#### Step 3.4: Delete EKS Cluster
+
+```bash
+# Delete the EKS cluster
+eksctl delete cluster \
+  --name shopnow-cluster \
+  --region us-east-1
+
+# This is a comprehensive deletion that:
+# ✓ Deletes control plane
+# ✓ Deletes all remaining worker nodes
+# ✓ Deletes load balancers
+# ✓ Deletes security groups
+# ✓ Deletes VPC resources associated with cluster
+
+# Expected output:
+# 2025-12-09 XX:XX:XX [ℹ]  will delete stack "eksctl-shopnow-cluster-cluster"
+# 2025-12-09 XX:XX:XX [✔]  all cluster resources were cleaned up
+
+# TIME: 10-15 minutes
+
+# Monitor deletion progress:
+aws eks describe-cluster --name shopnow-cluster --region us-east-1
+# Should eventually show: ResourceNotFoundException
+```
+
+#### Step 3.5: Verify Cluster Deletion
+
+```bash
+# Confirm cluster no longer exists
+aws eks describe-cluster \
+  --name shopnow-cluster \
+  --region us-east-1 \
+  --query 'cluster.status' \
+  --output text 2>&1 | grep -q "ResourceNotFoundException" && echo "Cluster deleted" || echo "Cluster still exists"
+
+# List remaining clusters
+aws eks list-clusters --region us-east-1
+# Should not show shopnow-cluster
+
+# Check CloudFormation stacks
+aws cloudformation list-stacks \
+  --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE \
+  --region us-east-1 | grep -i shopnow || echo "No ShopNow stacks found"
+```
+
+---
+
+### Phase 4: ECR (Elastic Container Registry) Cleanup
+
+#### Step 4.1: List ECR Repositories
+
+```bash
+# List all repositories
+aws ecr describe-repositories --region us-east-1
+
+# Get repository URIs
+aws ecr describe-repositories \
+  --region us-east-1 \
+  --query 'repositories[*].[repositoryName,repositoryUri]' \
+  --output table
+```
+
+#### Step 4.2: Delete Backend Repository
+
+```bash
+# Delete all images in backend repository
+aws ecr delete-repository \
+  --repository-name shopnow/backend \
+  --region us-east-1 \
+  --force
+
+# Expected output:
+# {
+#   "repository": {
+#     "repositoryArn": "arn:aws:ecr:...",
+#     "registryId": "123456789012",
+#     "repositoryName": "shopnow/backend",
+#     "repositoryUri": "123456789012.dkr.ecr.us-east-1.amazonaws.com/shopnow/backend",
+#     "createdAt": ...
+#   }
+# }
+```
+
+#### Step 4.3: Delete Frontend Repository
+
+```bash
+# Delete all images in frontend repository
+aws ecr delete-repository \
+  --repository-name shopnow/frontend \
+  --region us-east-1 \
+  --force
+
+# Expected output: Similar to backend deletion
+```
+
+#### Step 4.4: Verify Repositories Deleted
+
+```bash
+# Verify no ShopNow repositories remain
+aws ecr describe-repositories \
+  --region us-east-1 \
+  --query 'repositories[*].repositoryName'
+
+# Should not show shopnow/* repositories
+```
+
+---
+
+### Phase 5: EC2 Master Instance Termination
+
+#### Step 5.1: Stop Services on Master Instance
+
+```bash
+# SSH to master instance
+ssh -i your-key.pem ec2-user@<MASTER_IP>
+
+# Stop SonarQube
+sudo systemctl stop sonarqube
+sudo systemctl disable sonarqube
+
+# Stop Jenkins (if running on EC2)
+sudo systemctl stop jenkins
+sudo systemctl disable jenkins
+
+# Stop PostgreSQL
+sudo systemctl stop postgresql
+sudo systemctl disable postgresql
+
+# Stop Docker
+sudo systemctl stop docker
+sudo systemctl disable docker
+
+# Verify services are stopped
+sudo systemctl status sonarqube
+sudo systemctl status postgresql
+sudo systemctl status docker
+# All should show "inactive"
+```
+
+#### Step 5.2: Clean Up Data on Master Instance
+
+```bash
+# Clear SonarQube data
+sudo rm -rf /opt/sonarqube
+sudo rm -rf /var/lib/sonarqube
+
+# Clear Jenkins data (optional, depends on policy)
+sudo rm -rf /var/lib/jenkins
+
+# Clear PostgreSQL data
+sudo su - postgres
+dropdb sonarqube
+dropuser sonar
+exit
+
+# Clear Docker images and containers
+docker system prune -a --force --volumes
+
+# Clear caches
+rm -rf ~/.m2/repository
+rm -rf ~/.docker
+```
+
+#### Step 5.3: Terminate EC2 Instance
+
+```bash
+# Get instance ID
+INSTANCE_ID=$(aws ec2 describe-instances \
+  --filters "Name=tag:Name,Values=shopnow-devops-master" \
+  --query 'Reservations[0].Instances[0].InstanceId' \
+  --output text \
+  --region us-east-1)
+
+echo "Instance ID: $INSTANCE_ID"
+
+# Terminate the instance
+aws ec2 terminate-instances \
+  --instance-ids $INSTANCE_ID \
+  --region us-east-1
+
+# Expected output:
+# {
+#   "TerminatingInstances": [
+#     {
+#       "InstanceId": "i-xxxxxxxxx",
+#       "CurrentState": {
+#         "Code": 32,
+#         "Name": "shutting-down"
+#       },
+#       ...
+#     }
+#   ]
+# }
+
+# Wait for termination (takes 1-2 minutes)
+aws ec2 wait instance-terminated \
+  --instance-ids $INSTANCE_ID \
+  --region us-east-1
+
+# Verify instance is terminated
+aws ec2 describe-instances \
+  --instance-ids $INSTANCE_ID \
+  --region us-east-1 \
+  --query 'Reservations[0].Instances[0].State.Name' \
+  --output text
+# Should output: terminated
+```
+
+#### Step 5.4: Delete EBS Volumes
+
+```bash
+# List volumes not attached to any instance
+aws ec2 describe-volumes \
+  --region us-east-1 \
+  --filters "Name=status,Values=available" \
+  --query 'Volumes[*].[VolumeId,Tags[?Key==`Name`].Value|[0]]' \
+  --output table
+
+# Delete volumes created for master instance
+# Replace vol-xxxxx with actual volume IDs
+aws ec2 delete-volume \
+  --volume-id vol-xxxxxxxxx \
+  --region us-east-1
+
+# Repeat for each orphaned volume
+
+# Verify deletion
+aws ec2 describe-volumes \
+  --region us-east-1 \
+  --filters "Name=status,Values=available"
+# Should show no volumes or only pre-existing ones
+```
+
+---
+
+### Phase 6: IAM Cleanup
+
+#### Step 6.1: Delete IAM Policies
+
+```bash
+# List custom policies
+aws iam list-policies \
+  --scope Local \
+  --query 'Policies[*].[PolicyName,Arn]' \
+  --output table | grep -i shopnow
+
+# Delete custom policies (if created)
+# Example:
+aws iam delete-policy \
+  --policy-arn arn:aws:iam::123456789012:policy/ShopNowECRAccessPolicy
+
+# Check for inline policies attached to users
+aws iam list-user-policies --user-name shopnow-cicd-user
+```
+
+#### Step 6.2: Delete IAM Users
+
+```bash
+# List IAM users related to deployment
+aws iam list-users \
+  --query 'Users[?contains(UserName, `shopnow`)].UserName' \
+  --output text
+
+# Delete access keys for users
+aws iam list-access-keys \
+  --user-name shopnow-cicd-user \
+  --query 'AccessKeyMetadata[*].AccessKeyId' \
+  --output text | xargs -I {} aws iam delete-access-key --user-name shopnow-cicd-user --access-key-id {}
+
+# Delete inline policies
+aws iam list-user-policies --user-name shopnow-cicd-user --query 'PolicyNames' --output text | xargs -I {} aws iam delete-user-policy --user-name shopnow-cicd-user --policy-name {}
+
+# Delete user
+aws iam delete-user --user-name shopnow-cicd-user
+
+# Expected output: (empty if successful)
+```
+
+#### Step 6.3: Delete IAM Roles
+
+```bash
+# List roles related to deployment
+aws iam list-roles \
+  --query 'Roles[?contains(RoleName, `shopnow`)].RoleName' \
+  --output text
+
+# For each role, detach policies:
+# Example: shopnow-eks-cluster-role
+
+# List attached policies
+aws iam list-attached-role-policies \
+  --role-name shopnow-eks-cluster-role \
+  --query 'AttachedPolicies[*].PolicyArn' \
+  --output text
+
+# Detach each policy
+aws iam detach-role-policy \
+  --role-name shopnow-eks-cluster-role \
+  --policy-arn arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+
+aws iam detach-role-policy \
+  --role-name shopnow-eks-cluster-role \
+  --policy-arn arn:aws:iam::aws:policy/AmazonEKSVPCResourceController
+
+# Delete inline policies
+aws iam list-role-policies \
+  --role-name shopnow-eks-cluster-role \
+  --query 'PolicyNames' \
+  --output text | xargs -I {} aws iam delete-role-policy --role-name shopnow-eks-cluster-role --policy-name {}
+
+# Delete role
 aws iam delete-role --role-name shopnow-eks-cluster-role
 
-aws iam detach-role-policy --role-name shopnow-eks-node-role --policy-arn arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
-aws iam delete-role --role-name shopnow-eks-node-role
-
-# Delete security groups
-aws ec2 delete-security-group --group-id sg-xxxxxxxxx --region us-east-1
-
-# Delete S3 bucket (if created for state)
-aws s3 rb s3://shopnow-deployment-xxxxx --force
+# Repeat for shopnow-eks-node-role and other roles
 ```
 
-### Cost Impact After Cleanup
+---
+
+### Phase 7: Security Groups & Network Cleanup
+
+#### Step 7.1: List Security Groups
+
+```bash
+# List security groups related to deployment
+aws ec2 describe-security-groups \
+  --region us-east-1 \
+  --query 'SecurityGroups[?Tags[?Key==`Name` && Value==`shopnow-devops-sg`]].GroupId' \
+  --output text
+```
+
+#### Step 7.2: Remove Security Group Rules
+
+```bash
+# Get security group ID
+SG_ID="sg-xxxxxxxxx"
+
+# Revoke inbound rules
+aws ec2 revoke-security-group-ingress \
+  --group-id $SG_ID \
+  --ip-permissions IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges='[{IpCidr=0.0.0.0/0}]' \
+  --region us-east-1 2>/dev/null || echo "SSH rule not found"
+
+aws ec2 revoke-security-group-ingress \
+  --group-id $SG_ID \
+  --ip-permissions IpProtocol=tcp,FromPort=80,ToPort=80,IpRanges='[{IpCidr=0.0.0.0/0}]' \
+  --region us-east-1 2>/dev/null || echo "HTTP rule not found"
+
+aws ec2 revoke-security-group-ingress \
+  --group-id $SG_ID \
+  --ip-permissions IpProtocol=tcp,FromPort=443,ToPort=443,IpRanges='[{IpCidr=0.0.0.0/0}]' \
+  --region us-east-1 2>/dev/null || echo "HTTPS rule not found"
+
+aws ec2 revoke-security-group-ingress \
+  --group-id $SG_ID \
+  --ip-permissions IpProtocol=tcp,FromPort=8080,ToPort=8080,IpRanges='[{IpCidr=0.0.0.0/0}]' \
+  --region us-east-1 2>/dev/null || echo "Jenkins rule not found"
+
+aws ec2 revoke-security-group-ingress \
+  --group-id $SG_ID \
+  --ip-permissions IpProtocol=tcp,FromPort=9000,ToPort=9000,IpRanges='[{IpCidr=0.0.0.0/0}]' \
+  --region us-east-1 2>/dev/null || echo "SonarQube rule not found"
+
+# Verify all rules are removed
+aws ec2 describe-security-groups \
+  --group-ids $SG_ID \
+  --region us-east-1 \
+  --query 'SecurityGroups[0].IpPermissions'
+# Should show empty array []
+```
+
+#### Step 7.3: Delete Security Groups
+
+```bash
+# Delete security group
+aws ec2 delete-security-group \
+  --group-id sg-xxxxxxxxx \
+  --region us-east-1
+
+# Expected output: (empty if successful)
+
+# Verify deletion
+aws ec2 describe-security-groups \
+  --filters "Name=group-id,Values=sg-xxxxxxxxx" \
+  --region us-east-1 \
+  --query 'SecurityGroups'
+# Should show empty list
+```
+
+---
+
+### Phase 8: Load Balancers & Elastic IPs Cleanup
+
+#### Step 8.1: Delete Network Load Balancers
+
+```bash
+# List load balancers
+aws elbv2 describe-load-balancers \
+  --region us-east-1 \
+  --query 'LoadBalancers[*].[LoadBalancerName,LoadBalancerArn]' \
+  --output table | grep -i shopnow
+
+# Get NLB ARN
+NLB_ARN=$(aws elbv2 describe-load-balancers \
+  --region us-east-1 \
+  --query 'LoadBalancers[?contains(LoadBalancerName, `shopnow`)].LoadBalancerArn' \
+  --output text)
+
+# Delete NLBs
+aws elbv2 delete-load-balancer \
+  --load-balancer-arn $NLB_ARN \
+  --region us-east-1
+
+# Expected output: (empty if successful)
+
+# Wait for deletion (takes 1-2 minutes)
+sleep 120
+
+# Verify deletion
+aws elbv2 describe-load-balancers \
+  --region us-east-1 \
+  --query 'LoadBalancers[*].LoadBalancerName' | grep -i shopnow
+# Should not find any
+```
+
+#### Step 8.2: Delete Target Groups
+
+```bash
+# List target groups
+aws elbv2 describe-target-groups \
+  --region us-east-1 \
+  --query 'TargetGroups[*].[TargetGroupName,TargetGroupArn]' \
+  --output table | grep -i shopnow
+
+# Delete target groups
+TG_ARN=$(aws elbv2 describe-target-groups \
+  --region us-east-1 \
+  --query 'TargetGroups[?contains(TargetGroupName, `shopnow`)].TargetGroupArn' \
+  --output text)
+
+aws elbv2 delete-target-group \
+  --target-group-arn $TG_ARN \
+  --region us-east-1 2>/dev/null || echo "Target group not found or already deleted"
+
+# Verify deletion
+aws elbv2 describe-target-groups \
+  --region us-east-1 \
+  --query 'TargetGroups[*].TargetGroupName' | grep -i shopnow || echo "No ShopNow target groups found"
+```
+
+#### Step 8.3: Release Elastic IPs
+
+```bash
+# List Elastic IPs
+aws ec2 describe-addresses \
+  --region us-east-1 \
+  --query 'Addresses[?Tags[?Key==`Name`]].PublicIp' \
+  --output text
+
+# Release Elastic IPs
+ALLOCATION_ID=$(aws ec2 describe-addresses \
+  --region us-east-1 \
+  --filters "Name=tag:Name,Values=shopnow-master-eip" \
+  --query 'Addresses[0].AllocationId' \
+  --output text)
+
+aws ec2 release-address \
+  --allocation-id $ALLOCATION_ID \
+  --region us-east-1 2>/dev/null || echo "Elastic IP not found or already released"
+
+# Verify release
+aws ec2 describe-addresses \
+  --region us-east-1 \
+  --filters "Name=tag:Name,Values=shopnow*" | grep -i "shopnow" || echo "No ShopNow Elastic IPs found"
+```
+
+---
+
+### Phase 9: S3 & Storage Cleanup
+
+#### Step 9.1: List S3 Buckets
+
+```bash
+# List all S3 buckets related to deployment
+aws s3api list-buckets \
+  --query 'Buckets[*].Name' \
+  --output text | tr '\t' '\n' | grep -i shopnow
+```
+
+#### Step 9.2: Empty S3 Buckets
+
+```bash
+# Remove all objects from bucket
+aws s3 rm s3://shopnow-deployment-xxxxx --recursive
+
+# Expected output:
+# delete: s3://shopnow-deployment-xxxxx/file1.txt
+# delete: s3://shopnow-deployment-xxxxx/file2.txt
+# ...
+```
+
+#### Step 9.3: Delete S3 Buckets
+
+```bash
+# Delete empty bucket
+aws s3api delete-bucket \
+  --bucket shopnow-deployment-xxxxx \
+  --region us-east-1
+
+# Expected output: (empty if successful)
+
+# Verify deletion
+aws s3api list-buckets \
+  --query 'Buckets[*].Name' \
+  --output text | grep -i shopnow || echo "No ShopNow buckets found"
+```
+
+---
+
+### Phase 10: CloudWatch & Logging Cleanup
+
+#### Step 10.1: Delete CloudWatch Log Groups
+
+```bash
+# List log groups related to deployment
+aws logs describe-log-groups \
+  --region us-east-1 \
+  --query 'logGroups[*].logGroupName' \
+  --output text | grep -i shopnow
+
+# Delete log groups
+aws logs delete-log-group \
+  --log-group-name /aws/eks/shopnow-cluster \
+  --region us-east-1 2>/dev/null || echo "Log group not found"
+
+# Delete SonarQube logs
+sudo rm -rf /var/log/sonarqube
+
+# Delete Jenkins logs
+sudo rm -rf /var/log/jenkins
+
+# Verify deletion
+aws logs describe-log-groups \
+  --region us-east-1 \
+  --query 'logGroups[*].logGroupName' | grep -i shopnow || echo "No ShopNow log groups found"
+```
+
+#### Step 10.2: Delete CloudWatch Alarms
+
+```bash
+# List alarms
+aws cloudwatch describe-alarms \
+  --region us-east-1 \
+  --query 'MetricAlarms[*].AlarmName' \
+  --output text | grep -i shopnow
+
+# Delete alarms (if created)
+aws cloudwatch delete-alarms \
+  --alarm-names "shopnow-cpu-alert" "shopnow-memory-alert" \
+  --region us-east-1 2>/dev/null || echo "Alarms not found"
+
+# Verify deletion
+aws cloudwatch describe-alarms \
+  --region us-east-1 \
+  --query 'MetricAlarms[*].AlarmName' | grep -i shopnow || echo "No ShopNow alarms found"
+```
+
+---
+
+### Phase 11: CloudFormation & Stack Cleanup
+
+#### Step 11.1: List CloudFormation Stacks
+
+```bash
+# List stacks related to deployment
+aws cloudformation list-stacks \
+  --region us-east-1 \
+  --query 'StackSummaries[?StackName==`eksctl-shopnow-cluster-cluster`].StackName' \
+  --output text
+```
+
+#### Step 11.2: Delete CloudFormation Stacks
+
+```bash
+# Note: EKS cluster deletion via eksctl should have already deleted associated stacks
+# Manually delete if any remain:
+
+aws cloudformation delete-stack \
+  --stack-name eksctl-shopnow-cluster-cluster \
+  --region us-east-1 2>/dev/null || echo "Stack not found or already deleted"
+
+# Wait for deletion
+aws cloudformation wait stack-delete-complete \
+  --stack-name eksctl-shopnow-cluster-cluster \
+  --region us-east-1 2>/dev/null || echo "Stack deleted"
+
+# Verify deletion
+aws cloudformation describe-stacks \
+  --stack-name eksctl-shopnow-cluster-cluster \
+  --region us-east-1 2>&1 | grep -i "does not exist" && echo "Stack successfully deleted" || echo "Stack may still exist"
+```
+
+---
+
+### Phase 12: Final Verification & Documentation
+
+#### Step 12.1: Verify All Resources Deleted
+
+```bash
+# EC2 Instances
+echo "=== EC2 Instances ==="
+aws ec2 describe-instances \
+  --filters "Name=tag:Name,Values=shopnow*" \
+  --region us-east-1 \
+  --query 'Reservations[*].Instances[*].[InstanceId,State.Name]' \
+  --output table || echo "No instances found"
+
+# EKS Clusters
+echo "=== EKS Clusters ==="
+aws eks list-clusters --region us-east-1 --query 'clusters' --output text | grep shopnow || echo "No EKS clusters found"
+
+# ECR Repositories
+echo "=== ECR Repositories ==="
+aws ecr describe-repositories --region us-east-1 --query 'repositories[*].repositoryName' --output text | grep shopnow || echo "No ECR repositories found"
+
+# RDS Databases
+echo "=== RDS Databases ==="
+aws rds describe-db-instances --region us-east-1 --query 'DBInstances[*].DBInstanceIdentifier' --output text | grep shopnow || echo "No RDS instances found"
+
+# Load Balancers
+echo "=== Load Balancers ==="
+aws elbv2 describe-load-balancers --region us-east-1 --query 'LoadBalancers[*].LoadBalancerName' --output text | grep shopnow || echo "No load balancers found"
+
+# IAM Resources
+echo "=== IAM Users ==="
+aws iam list-users --query 'Users[*].UserName' --output text | grep shopnow || echo "No IAM users found"
+
+echo "=== IAM Roles ==="
+aws iam list-roles --query 'Roles[*].RoleName' --output text | grep shopnow || echo "No IAM roles found"
+
+# Security Groups
+echo "=== Security Groups ==="
+aws ec2 describe-security-groups --region us-east-1 --query 'SecurityGroups[?Tags[?Value==`shopnow*`]].GroupId' --output text | wc -l
+
+# S3 Buckets
+echo "=== S3 Buckets ==="
+aws s3api list-buckets --query 'Buckets[*].Name' --output text | grep -i shopnow || echo "No S3 buckets found"
+```
+
+#### Step 12.2: Create Termination Report
+
+```bash
+# Generate termination report
+cat > TERMINATION-REPORT.md <<EOF
+# ShopNow Deployment Termination Report
+
+**Date**: $(date)
+**Region**: us-east-1
+
+## Terminated Resources
+
+### Kubernetes
+- [ ] Namespace: shopnow-app
+- [ ] Namespace: monitoring
+- [ ] All deployments, services, and pods
+
+### EKS Cluster
+- [ ] Cluster: shopnow-cluster
+- [ ] Node groups: shopnow-nodes
+- [ ] Add-ons: vpc-cni, coredns, kube-proxy, aws-load-balancer-controller
+
+### EC2
+- [ ] Instance: shopnow-devops-master (t3.xlarge)
+- [ ] EBS Volumes: All associated volumes
+
+### ECR
+- [ ] Repository: shopnow/backend
+- [ ] Repository: shopnow/frontend
+- [ ] All images deleted
+
+### IAM
+- [ ] User: shopnow-cicd-user
+- [ ] Role: shopnow-eks-cluster-role
+- [ ] Role: shopnow-eks-node-role
+- [ ] Policies and permissions
+
+### Networking
+- [ ] Security Group: shopnow-devops-sg
+- [ ] Network Load Balancers: 2x NLB
+- [ ] Target Groups: Associated target groups
+- [ ] Elastic IPs: Released
+
+### Storage
+- [ ] S3 Bucket: shopnow-deployment-xxxxx
+- [ ] All objects deleted
+
+### Monitoring
+- [ ] CloudWatch Log Groups
+- [ ] CloudWatch Alarms
+- [ ] Prometheus/Grafana data
+
+### CloudFormation
+- [ ] Stack: eksctl-shopnow-cluster-cluster
+- [ ] All associated resources
+
+## Cost Impact
+
+**Monthly savings**: ~$410/month  
+**Annual savings**: ~$4,920/year
+
+## Verification
+
+All resources have been successfully terminated.
+No remaining AWS charges for ShopNow deployment.
+
+EOF
+
+cat TERMINATION-REPORT.md
+```
+
+#### Step 12.3: Final Billing Check
+
+```bash
+# Check remaining resources in account
+echo "Checking for any remaining resources..."
+
+# Get cost and usage
+aws ce get-cost-and-usage \
+  --time-period Start=2025-12-01,End=2025-12-09 \
+  --granularity MONTHLY \
+  --metrics "UnblendedCost" \
+  --region us-east-1 \
+  --output table
+
+# Monitor for 24-48 hours to ensure no additional charges appear
+# Check AWS Billing Dashboard for final confirmation
+```
+
+---
+
+### ✅ Termination Checklist
+
+- [ ] Phase 1: Application & Kubernetes cleanup complete
+- [ ] Phase 2: Monitoring & observability cleanup complete
+- [ ] Phase 3: EKS cluster termination complete
+- [ ] Phase 4: ECR cleanup complete
+- [ ] Phase 5: EC2 master instance termination complete
+- [ ] Phase 6: IAM cleanup complete
+- [ ] Phase 7: Security groups & network cleanup complete
+- [ ] Phase 8: Load balancers & Elastic IPs cleanup complete
+- [ ] Phase 9: S3 & storage cleanup complete
+- [ ] Phase 10: CloudWatch & logging cleanup complete
+- [ ] Phase 11: CloudFormation stack cleanup complete
+- [ ] Phase 12: Final verification complete
+- [ ] TERMINATION-REPORT.md generated and reviewed
+- [ ] Billing dashboard confirms no ShopNow charges
+- [ ] All AWS resources successfully removed
+
+---
+
+### Cost Savings Summary
 
 ```
-Before Cleanup: $214/month
-After Full Cleanup: $0/month
+Pre-Termination Monthly Cost:
+├── Master Instance (t3.xlarge): $140
+├── EKS Control Plane: $73
+├── Worker Nodes (3x t3.medium): $90
+├── Storage (EBS): $10
+├── Load Balancers: $32
+└── Data Transfer: $65
+    ──────────────────────────
+    TOTAL: ~$410/month
 
-Cleanup saves: ~$2,568/year
+Post-Termination Monthly Cost: $0/month
+
+Annual Savings: ~$4,920
+```
+
+---
+
+## 🧹 Quick Cleanup (Alternative)
+
+---
+
+## 🧹 Quick Cleanup (Alternative)
+
+If you need to quickly terminate everything without detailed steps:
+
+```bash
+#!/bin/bash
+# Quick Termination Script - USE WITH CAUTION!
+
+CLUSTER_NAME="shopnow-cluster"
+REGION="us-east-1"
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+echo "⚠️  WARNING: This will DELETE ALL ShopNow resources!"
+echo "Press Ctrl+C to cancel, or wait 10 seconds to continue..."
+sleep 10
+
+# 1. Delete Kubernetes namespaces
+echo "Deleting Kubernetes namespaces..."
+kubectl delete namespace shopnow-app monitoring --ignore-not-found=true
+
+# 2. Delete EKS cluster
+echo "Deleting EKS cluster (this takes 10-15 minutes)..."
+eksctl delete cluster --name $CLUSTER_NAME --region $REGION --force
+
+# 3. Delete ECR repositories
+echo "Deleting ECR repositories..."
+aws ecr delete-repository --repository-name shopnow/backend --region $REGION --force 2>/dev/null || true
+aws ecr delete-repository --repository-name shopnow/frontend --region $REGION --force 2>/dev/null || true
+
+# 4. Terminate EC2 instances
+echo "Terminating EC2 instances..."
+INSTANCE_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=shopnow-devops-master" \
+  --query 'Reservations[0].Instances[0].InstanceId' --output text --region $REGION)
+if [ ! -z "$INSTANCE_ID" ] && [ "$INSTANCE_ID" != "None" ]; then
+  aws ec2 terminate-instances --instance-ids $INSTANCE_ID --region $REGION
+fi
+
+# 5. Delete security groups
+echo "Deleting security groups..."
+SG_ID=$(aws ec2 describe-security-groups --filters "Name=tag:Name,Values=shopnow-devops-sg" \
+  --query 'SecurityGroups[0].GroupId' --output text --region $REGION)
+if [ ! -z "$SG_ID" ] && [ "$SG_ID" != "None" ]; then
+  sleep 5
+  aws ec2 delete-security-group --group-id $SG_ID --region $REGION 2>/dev/null || true
+fi
+
+# 6. Delete IAM resources
+echo "Deleting IAM resources..."
+for user in shopnow-cicd-user; do
+  # Delete access keys
+  aws iam list-access-keys --user-name $user --query 'AccessKeyMetadata[*].AccessKeyId' \
+    --output text | xargs -I {} aws iam delete-access-key --user-name $user --access-key-id {}
+  # Delete user policies
+  aws iam list-user-policies --user-name $user --query 'PolicyNames[*]' --output text | \
+    xargs -I {} aws iam delete-user-policy --user-name $user --policy-name {}
+  # Delete user
+  aws iam delete-user --user-name $user 2>/dev/null || true
+done
+
+for role in shopnow-eks-cluster-role shopnow-eks-node-role; do
+  # Detach policies
+  aws iam list-attached-role-policies --role-name $role --query 'AttachedPolicies[*].PolicyArn' \
+    --output text | xargs -I {} aws iam detach-role-policy --role-name $role --policy-arn {}
+  # Delete inline policies
+  aws iam list-role-policies --role-name $role --query 'PolicyNames[*]' --output text | \
+    xargs -I {} aws iam delete-role-policy --role-name $role --policy-name {}
+  # Delete role
+  aws iam delete-role --role-name $role 2>/dev/null || true
+done
+
+# 7. Delete S3 buckets
+echo "Deleting S3 buckets..."
+aws s3api list-buckets --query 'Buckets[*].Name' --output text | tr '\t' '\n' | grep -i shopnow | \
+  while read bucket; do
+    aws s3 rm s3://$bucket --recursive 2>/dev/null || true
+    aws s3api delete-bucket --bucket $bucket --region $REGION 2>/dev/null || true
+  done
+
+echo "✅ Termination process initiated!"
+echo "⏱️  EKS cluster deletion will take 10-15 minutes"
+echo "Monitor progress in AWS Console"
 ```
 
 ---
