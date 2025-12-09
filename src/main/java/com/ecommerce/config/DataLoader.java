@@ -112,9 +112,10 @@ public class DataLoader implements CommandLineRunner {
         watch.setActive(true);
 
         // Save all products
-        productRepository.saveAll(Arrays.asList(
+        var products = Arrays.asList(
                 laptop, smartphone, headphones, tshirt, jeans,
-                book1, book2, coffeemaker, blender, watch));
+                book1, book2, coffeemaker, blender, watch);
+        productRepository.saveAll(products);
 
         System.out.println("✅ Sample data loaded successfully! Total products: " + productRepository.count());
     }
